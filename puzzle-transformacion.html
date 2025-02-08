@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>El Puzzle de la Transformación</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 0;
+      padding: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #333;
+    }
+    p {
+      text-align: center;
+    }
+    #container {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    #pieces {
+      width: 250px;
+      min-height: 350px;
+      background: #fff;
+      border: 2px dashed #ccc;
+      padding: 10px;
+      margin-bottom: 20px;
+    }
+    .piece {
+      background: #4CAF50;
+      color: #fff;
+      padding: 10px;
+      margin: 10px 0;
+      text-align: center;
+      cursor: grab;
+      border-radius: 5px;
+      user-select: none;
+    }
+    #puzzle {
+      display: grid;
+      grid-template-columns: repeat(3, 110px);
+      grid-template-rows: repeat(3, 110px);
+      gap: 10px;
+    }
+    .slot {
+      background: #fff;
+      border: 2px dashed #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      border-radius: 5px;
+      min-height: 110px;
+      padding: 5px;
+      text-align: center;
+    }
+    .slot.over {
+      border-color: #4CAF50;
+    }
+    .slot.filled {
+      border-style: solid;
+    }
+    #timer, #message {
+      text-align: center;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    #orderedList {
+      margin-top: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    #resetButton {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #2196F3;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>El Puzzle de la Transformación</h1>
+  <p>Arrastra y suelta cada pieza en el slot correcto. ¡Resuélvelo en el menor tiempo posible!</p>
+  <div id="timer">Tiempo: 0 segundos</div>
+  <div id="container">
+    <!-- Área de piezas arrastrables (las 10 opciones, en orden aleatorio) -->
+    <div id="pieces"></div>
+    <!-- Puzzle: cuadrícula 3x3 con los 9 slots en el orden correcto -->
+    <div id="puzzle"></div>
+  </div>
+  <div id="message"></div>
+  <button id="resetButton">Reiniciar Puzzle</button>
+  <div id="orderedList"></div>
+
+  <script>
+    // Array con los 9 aspectos correctos en el orden (solución del puzzle)
+    const solutionOrder = [
+      { id: "comunicacion", label: "Comunicación efectiva", description: "Es la base para establecer confianza y claridad en el equipo. Un líder que comunica de manera clara y asertiva asegura que la información fluya en ambas direcciones, permitiendo la coordinación y la rápida resolución de problemas." },
+      { id: "adaptabilidad", label: "Adaptabilidad y flexibilidad", description: "En entornos dinámicos, la capacidad de ajustarse a nuevas circunstancias y responder proactivamente a los cambios es crucial para mantener la competitividad y el buen desempeño del equipo." },
+      { id: "decisiones", label: "Toma de decisiones asertiva", description: "La rapidez y solidez en la toma de decisiones, basada en información actualizada y en la experiencia, permite capitalizar oportunidades y gestionar crisis sin perder el rumbo." },
+      { id: "inteligencia", label: "Inteligencia emocional", description: "Un líder con alta inteligencia emocional es capaz de gestionar sus propias emociones y entender las de los demás, lo que facilita el manejo de conflictos, fomenta la empatía y crea un ambiente laboral positivo." },
+      { id: "vision", label: "Visión estratégica", description: "Contar con una perspectiva a largo plazo y comprender cómo las acciones actuales impactan en el futuro es esencial para anticipar tendencias, definir objetivos claros y guiar al equipo en medio de la incertidumbre." },
+      { id: "gestion", label: "Gestión del cambio", description: "Liderar procesos de transformación implica no solo implementar nuevas estrategias, sino también acompañar al equipo durante la transición, minimizando la resistencia y aprovechando el potencial de mejora." },
+      { id: "empoderamiento", label: "Empoderamiento del equipo", description: "Fomentar la autonomía y el desarrollo individual fortalece la confianza y la capacidad del equipo para tomar iniciativas, lo que a su vez mejora la eficiencia y la creatividad ante los desafíos." },
+      { id: "innovacion", label: "Fomento de la innovación y la creatividad", description: "En un entorno que cambia constantemente, incentivar la generación de nuevas ideas y soluciones es clave para adaptarse y aprovechar oportunidades emergentes, manteniendo a la empresa a la vanguardia." },
+      { id: "inspiracion", label: "Inspiración y motivación", description: "Un líder que inspira y motiva es capaz de contagiar entusiasmo y compromiso, impulsando a su equipo a superar obstáculos y alcanzar metas, incluso en momentos difíciles." }
+    ];
+
+    // Array con las 10 opciones para la caja de selección (los 9 anteriores + el distractor)
+    const fullOptions = [
+      ...solutionOrder,
+      { id: "aprendizaje", label: "Aprendizaje continuo y humildad", description: "Reconocer que siempre hay margen para mejorar y estar abierto al feedback fomenta una cultura de crecimiento personal y profesional, permitiendo que tanto el líder como el equipo evolucionen ante los cambios." }
+    ];
+
+    let startTime, timerInterval;
+
+    // Función para mezclar un array de forma aleatoria (Fisher–Yates)
+    function shuffleArray(array) {
+      const arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Inicializa el puzzle: crea la lista de piezas y los slots del puzzle (solución)
+    function initPuzzle() {
+      const piecesContainer = document.getElementById('pieces');
+      const puzzleContainer = document.getElementById('puzzle');
+      const messageDiv = document.getElementById('message');
+      const orderedListDiv = document.getElementById('orderedList');
+      
+      piecesContainer.innerHTML = '';
+      puzzleContainer.innerHTML = '';
+      messageDiv.textContent = '';
+      orderedListDiv.innerHTML = '';
+
+      // Mezcla las 10 opciones para la caja de selección
+      const shuffledOptions = shuffleArray(fullOptions);
+
+      // Crear las piezas arrastrables (10 piezas)
+      shuffledOptions.forEach(option => {
+        const piece = document.createElement('div');
+        piece.classList.add('piece');
+        piece.textContent = option.label;
+        piece.setAttribute('draggable', 'true');
+        piece.dataset.aspect = option.id;
+        piece.addEventListener('dragstart', dragStart);
+        piecesContainer.appendChild(piece);
+      });
+
+      // Crear los 9 slots del puzzle en el orden correcto (solución)
+      solutionOrder.forEach(option => {
+        const slot = document.createElement('div');
+        slot.classList.add('slot');
+        slot.dataset.aspect = option.id;
+        slot.textContent = "Slot"; // Texto de placeholder
+        slot.addEventListener('dragover', dragOver);
+        slot.addEventListener('dragleave', dragLeave);
+        slot.addEventListener('drop', dropPiece);
+        puzzleContainer.appendChild(slot);
+      });
+
+      // Inicia el temporizador
+      startTimer();
+    }
+
+    // Inicia el temporizador
+    function startTimer() {
+      startTime = Date.now();
+      const timerDiv = document.getElementById('timer');
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        timerDiv.textContent = 'Tiempo: ' + seconds + ' segundos';
+      }, 1000);
+    }
+
+    // Detiene el temporizador
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    // Eventos de drag & drop
+    function dragStart(e) {
+      e.dataTransfer.setData('text/plain', e.target.dataset.aspect);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function dragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('over');
+    }
+
+    function dragLeave(e) {
+      e.currentTarget.classList.remove('over');
+    }
+
+    // Función que se ejecuta al soltar una pieza en un slot
+    function dropPiece(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('over');
+      const pieceAspect = e.dataTransfer.getData('text/plain');
+      const slotAspect = e.currentTarget.dataset.aspect;
+
+      // Evita reemplazar una pieza ya colocada
+      if (e.currentTarget.classList.contains('filled')) {
+        return;
+      }
+
+      // Verifica si la pieza corresponde al slot (según el id)
+      if (pieceAspect === slotAspect) {
+        const piece = document.querySelector(`.piece[data-aspect='${pieceAspect}']`);
+        // Mueve la pieza al slot y limpia el placeholder
+        e.currentTarget.textContent = "";
+        e.currentTarget.appendChild(piece);
+        e.currentTarget.classList.add('filled');
+        checkCompletion();
+      } else {
+        alert('¡Ups! Esa pieza no corresponde a este slot.');
+      }
+    }
+
+    // Verifica si se completó el puzzle (9 slots llenos correctamente)
+    function checkCompletion() {
+      const filledSlots = document.querySelectorAll('.slot.filled').length;
+      if (filledSlots === solutionOrder.length) {
+        stopTimer();
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('message').textContent = '¡Felicidades! Puzzle completado en ' + seconds + ' segundos.';
+        generateOrderedDescriptions();
+      }
+    }
+
+    // Genera y muestra la descripción ordenada de las claves de liderazgo
+    function generateOrderedDescriptions() {
+      const orderedListDiv = document.getElementById('orderedList');
+      let html = '<h2>Claves de un Liderazgo Efectivo</h2>';
+      html += '<ol>';
+      solutionOrder.forEach(item => {
+        html += '<li><strong>' + item.label + ':</strong> ' + item.description + '</li>';
+      });
+      html += '</ol>';
+      orderedListDiv.innerHTML = html;
+    }
+
+    // Asigna la función de reinicio al botón
+    document.getElementById('resetButton').addEventListener('click', initPuzzle);
+
+    // Inicializa el puzzle al cargar la página
+    window.addEventListener('load', initPuzzle);
+  </script>
+</body>
+</html>
