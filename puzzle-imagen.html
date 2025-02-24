@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle con Imagen</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    p {
+      text-align: center;
+    }
+    #container {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    /* Contenedor de piezas arrastrables */
+    #pieces {
+      width: 200px;
+      min-height: 320px;
+      background: #fff;
+      border: 2px dashed #ccc;
+      padding: 10px;
+      margin-bottom: 20px;
+    }
+    .piece {
+      width: 100px;
+      height: 100px;
+      margin: 10px 0;
+      cursor: grab;
+      border-radius: 5px;
+      user-select: none;
+      background-image: url("peluche.jpg"); /* Ajusta la ruta de tu imagen aquí */
+      background-size: 300px 300px;        /* Tamaño total de la imagen (3×3 piezas) */
+      background-repeat: no-repeat;
+    }
+    /* Contenedor del puzzle: 3 columnas x 3 filas */
+    #puzzle {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 10px;
+    }
+    .slot {
+      width: 100px;
+      height: 100px;
+      background: #fff;
+      border: 2px dashed #ccc;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slot.over {
+      border-color: #4CAF50;
+    }
+    .slot.filled {
+      border-style: solid;
+    }
+    #timer {
+      text-align: center;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    #message {
+      text-align: center;
+      font-size: 18px;
+      margin-top: 20px;
+      color: #4CAF50;
+    }
+    #resetButton {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #2196F3;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Puzzle de la Imagen</h1>
+  <p>Arrastra cada pieza al lugar correcto para reconstruir la imagen.</p>
+  <div id="timer">Tiempo: 0 segundos</div>
+
+  <div id="container">
+    <!-- Piezas arrastrables -->
+    <div id="pieces"></div>
+    <!-- Espacios del puzzle (slots) -->
+    <div id="puzzle"></div>
+  </div>
+
+  <div id="message"></div>
+  <button id="resetButton">Reiniciar Puzzle</button>
+
+  <script>
+    // Definimos 9 piezas, cada una con un id y su offset en la imagen
+    const puzzlePieces = [
+      // Cada objeto representa una porción de 100x100 dentro de la imagen de 300x300
+      { id: 1, backgroundPosition: "0px 0px" },
+      { id: 2, backgroundPosition: "-100px 0px" },
+      { id: 3, backgroundPosition: "-200px 0px" },
+      { id: 4, backgroundPosition: "0px -100px" },
+      { id: 5, backgroundPosition: "-100px -100px" },
+      { id: 6, backgroundPosition: "-200px -100px" },
+      { id: 7, backgroundPosition: "0px -200px" },
+      { id: 8, backgroundPosition: "-100px -200px" },
+      { id: 9, backgroundPosition: "-200px -200px" }
+    ];
+
+    let startTime, timerInterval;
+
+    // Función para mezclar un array (Fisher-Yates)
+    function shuffleArray(array) {
+      const arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Inicializa el puzzle
+    function initPuzzle() {
+      const piecesContainer = document.getElementById("pieces");
+      const puzzleContainer = document.getElementById("puzzle");
+      const messageDiv = document.getElementById("message");
+
+      piecesContainer.innerHTML = "";
+      puzzleContainer.innerHTML = "";
+      messageDiv.textContent = "";
+
+      // Mezclar piezas
+      const shuffledPieces = shuffleArray(puzzlePieces);
+
+      // Crear elementos arrastrables en el contenedor de piezas
+      shuffledPieces.forEach(piece => {
+        const pieceDiv = document.createElement("div");
+        pieceDiv.classList.add("piece");
+        pieceDiv.style.backgroundPosition = piece.backgroundPosition;
+        pieceDiv.setAttribute("draggable", "true");
+        pieceDiv.dataset.id = piece.id;
+        pieceDiv.addEventListener("dragstart", dragStart);
+        piecesContainer.appendChild(pieceDiv);
+      });
+
+      // Crear slots del puzzle en orden (1 al 9)
+      puzzlePieces.forEach(piece => {
+        const slot = document.createElement("div");
+        slot.classList.add("slot");
+        slot.dataset.id = piece.id; // El slot correcto para esa pieza
+        slot.addEventListener("dragover", dragOver);
+        slot.addEventListener("dragleave", dragLeave);
+        slot.addEventListener("drop", dropPiece);
+        puzzleContainer.appendChild(slot);
+      });
+
+      startTimer();
+    }
+
+    // Inicia el temporizador
+    function startTimer() {
+      startTime = Date.now();
+      const timerDiv = document.getElementById("timer");
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        timerDiv.textContent = "Tiempo: " + seconds + " segundos";
+      }, 1000);
+    }
+
+    // Detiene el temporizador
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    // Eventos de drag & drop
+    function dragStart(e) {
+      e.dataTransfer.setData("text/plain", e.target.dataset.id);
+      e.dataTransfer.effectAllowed = "move";
+    }
+
+    function dragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add("over");
+      e.dataTransfer.dropEffect = "move";
+    }
+
+    function dragLeave(e) {
+      e.currentTarget.classList.remove("over");
+    }
+
+    function dropPiece(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove("over");
+      const pieceId = e.dataTransfer.getData("text/plain");
+      const slotId = e.currentTarget.dataset.id;
+
+      // Verificar si el slot está vacío
+      if (e.currentTarget.classList.contains("filled")) {
+        return;
+      }
+
+      // Verificar si la pieza corresponde al slot
+      if (pieceId === slotId) {
+        const pieceDiv = document.querySelector(`.piece[data-id='${pieceId}']`);
+        e.currentTarget.appendChild(pieceDiv);
+        e.currentTarget.classList.add("filled");
+        checkCompletion();
+      } else {
+        alert("¡Esa pieza no corresponde a este lugar!");
+      }
+    }
+
+    // Verificar si el puzzle está completo (los 9 slots con la pieza correcta)
+    function checkCompletion() {
+      const filledSlots = document.querySelectorAll(".slot.filled").length;
+      if (filledSlots === puzzlePieces.length) {
+        stopTimer();
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById("message").textContent =
+          "¡Felicidades! Puzzle completado en " + seconds + " segundos.";
+      }
+    }
+
+    // Botón de reinicio
+    document.getElementById("resetButton").addEventListener("click", initPuzzle);
+
+    // Iniciar puzzle al cargar la página
+    window.addEventListener("load", initPuzzle);
+  </script>
+</body>
+</html>
